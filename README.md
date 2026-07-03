@@ -1,6 +1,8 @@
 # type_paint
 
-Creative coding / web experiment.
+Creative coding / web experiment. 
+
+Recreated the Classic Type Space Generator ribbon painter https://www.kielm.com
 
 ## Run
 
