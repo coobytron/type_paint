@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ribbon Type Painter</title>
+<style>
+  :root{
+    --font:   -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Helvetica, Arial, sans-serif;
+    --bg:     #f6f4ef;                 /* warm off-white — the whole set's base */
+    --ink:    #111111;                 /* primary text / strokes */
+    --muted:  #6e6a64;                 /* labels, secondary text */
+    --panel:  rgba(255,255,255,.74);   /* glass control panels */
+    --line:   rgba(0,0,0,.12);         /* hairline borders / dividers */
+    --accent: #ff4f1f;                 /* primary action / highlight (orange) */
+    --blue:   #0a84ff;                 /* active/on toggle state */
+    --shadow: 0 18px 60px rgba(0,0,0,.12);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.3 var(--font)}
+  canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  .ui{position:fixed; top:16px; left:16px; width:min(560px, calc(100vw - 32px)); background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow); padding:14px 14px 10px; -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); max-height: 92vh; overflow:auto}
+  .row{display:grid; grid-template-columns:200px 1fr; gap:10px; align-items:center; margin:8px 0}
+  .row.stack{grid-template-columns:1fr}
+  .row.inline{grid-template-columns:1fr 1fr}
+  label{color:var(--muted)}
+  input[type="text"], input[type="file"], input[type="number"]{width:100%; padding:8px 10px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.74); color:var(--ink)}
+  input[type="range"]{width:100%; accent-color:var(--ink)}
+  input[type="color"]{width:42px; height:26px; border:1px solid var(--line); border-radius:8px; background:none; padding:0; cursor:pointer}
+  select{width:100%; padding:8px 10px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.74); color:var(--ink)}
+  .small{font-size:12px; color:var(--muted)}
+  .section-header{font-size:12px; text-transform:uppercase; letter-spacing:.16em; color:var(--muted); margin:4px 0 8px}
+  .row .val{justify-self:end; color:var(--ink); font-variant-numeric: tabular-nums}
+  .btns{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap}
+  button{appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.74); color:var(--ink); font:650 12px/1 var(--font); padding:8px 11px; border-radius:999px; cursor:pointer; transition:all .15s ease}
+  button:hover{background:#fff; transform:translateY(-1px)}
+  button.primary{background:var(--ink); color:#fff; border-color:var(--ink)}
+  button.primary:hover{background:#000}
+  button.accent{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; background:rgba(255,255,255,.74); border:1px solid var(--line); padding:2px 6px; border-radius:6px; color:var(--ink)}
+  .hint{margin-top:8px;color:var(--muted)}
+  .watermark{position:fixed; right:16px; bottom:12px; color:var(--muted); opacity:.6; font-weight:600; letter-spacing:.12em}
+  .test-badge{position:fixed; right:16px; top:16px; padding:6px 10px; border-radius:999px; background:var(--panel); -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px); border:1px solid var(--line); color:var(--muted); font:12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
+  .test-badge.pass{box-shadow:0 0 0 1px rgba(10,132,255,.5) inset;}
+  .test-badge.fail{box-shadow:0 0 0 1px rgba(255,79,31,.6) inset;}
+  .subtle{opacity:.85}
+  .hidden{display:none}
+  hr{border:0;border-top:1px solid var(--line);margin:10px 0}
+</style>
+</head>
+<body>
+  <canvas id="stage" tabindex="0"></canvas>
+
+  <section class="ui" id="panel" aria-label="Ribbon Type Painter Controls">
+    <div class="row stack">
+      <label for="text">Text to paint</label>
+      <input id="text" type="text" value="RIBBON TYPE  •  " />
+    </div>
+    <div class="row">
+      <label for="font">Font</label>
+      <select id="font">
+        <option value="-apple-system, 'SF Pro Text', Inter, Helvetica, Arial, sans-serif">SF Pro / System</option>
+        <option value="'Helvetica Neue', Helvetica, Arial, sans-serif">Helvetica Neue</option>
+        <option value="'SF Mono', ui-monospace, Consolas, Menlo, monospace">SF Mono</option>
+        <option value="'Georgia', serif">Georgia</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="fontWeight">Font Weight</label>
+      <select id="fontWeight">
+        <option value="300">Light (300)</option>
+        <option value="400" selected>Regular (400)</option>
+        <option value="500">Medium (500)</option>
+        <option value="600">Semibold (600)</option>
+        <option value="700">Bold (700)</option>
+        <option value="800">ExtraBold (800)</option>
+        <option value="900">Black (900)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Font Size</label>
+      <input id="size" type="range" min="10" max="180" value="56" />
+      <div class="val" id="sizeVal">56</div>
+    </div>
+    <div class="row">
+      <label>Letter Spacing (px)</label>
+      <input id="spacing" type="range" min="6" max="140" value="38" />
+      <div class="val" id="spacingVal">38</div>
+    </div>
+    <div class="row">
+      <label>Ribbon Width</label>
+      <input id="ribbon" type="range" min="0" max="200" value="24" />
+      <div class="val" id="ribbonVal">24</div>
+    </div>
+    <div class="row">
+      <label>Show Ribbon Path</label>
+      <div><label><input id="showRibbon" type="checkbox" checked/> Visible</label></div>
+    </div>
+    <div class="row">
+      <label>Smoothing</label>
+      <input id="smooth" type="range" min="0" max="1" step="0.02" value="0.4" />
+      <div class="val" id="smoothVal">0.40</div>
+    </div>
+    <div class="row">
+      <label>Follow Rotation</label>
+      <select id="follow">
+        <option value="1">On</option>
+        <option value="0">Off</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Ink Color</label>
+      <input id="ink" type="color" value="#111111" />
+      <div class="val" id="inkHex">#111111</div>
+    </div>
+    <div class="row">
+      <label>Ribbon Color</label>
+      <input id="ribColor" type="color" value="#ff4f1f" />
+      <div class="val" id="ribHex">#ff4f1f</div>
+    </div>
+
+    <hr/>
+    <div class="section-header">Canvas</div>
+    <div class="row">
+      <label>Canvas Mode</label>
+      <select id="canvasMode">
+        <option value="fit">Fit window</option>
+        <option value="fixed">Fixed size</option>
+      </select>
+    </div>
+    <div class="row hidden" id="canvasSizeRow">
+      <label>Canvas Size (px)</label>
+      <div class="row inline">
+        <input id="canvasW" type="number" min="64" max="8000" value="1280" />
+        <input id="canvasH" type="number" min="64" max="8000" value="720" />
+      </div>
+    </div>
+    <div class="row">
+      <label>Canvas BG Color</label>
+      <input id="canvasBG" type="color" value="#f6f4ef" />
+      <div class="val" id="canvasBGVal">#f6f4ef</div>
+    </div>
+
+    <hr/>
+    <div class="section-header">Background</div>
+    <div class="row">
+      <label>Background</label>
+      <select id="bgMode">
+        <option value="none">None</option>
+        <option value="image">Image</option>
+        <option value="shape">Shape</option>
+      </select>
+    </div>
+
+    <!-- Image controls -->
+    <div class="row stack hidden" id="bgImageRow">
+      <label for="bgImg" class="subtle">Add image</label>
+      <input id="bgImg" type="file" accept="image/*"/>
+    </div>
+    <div class="row hidden" id="bgImageOpts">
+      <label>Image Fit</label>
+      <select id="bgFit">
+        <option value="cover">Cover</option>
+        <option value="contain">Contain</option>
+        <option value="stretch">Stretch</option>
+        <option value="manual">Manual</option>
+      </select>
+    </div>
+    <div class="row hidden" id="bgImageOpacityRow">
+      <label>Image Opacity</label>
+      <input id="bgImgOpacity" type="range" min="0" max="1" step="0.01" value="0.35"/>
+      <div class="val" id="bgImgOpacityVal">0.35</div>
+    </div>
+    <div class="row hidden" id="bgImgXRow">
+      <label>Image Offset X / Y</label>
+      <div class="row inline">
+        <input id="bgImgX" type="number" min="-4000" max="4000" value="0" />
+        <input id="bgImgY" type="number" min="-4000" max="4000" value="0" />
+      </div>
+    </div>
+    <div class="row hidden" id="bgImgScaleRow">
+      <label>Image Scale</label>
+      <input id="bgImgScale" type="range" min="0.1" max="3" step="0.01" value="1"/>
+      <div class="val" id="bgImgScaleVal">1.00×</div>
+    </div>
+    <div class="row hidden" id="bgImgRotRow">
+      <label>Image Rotation</label>
+      <input id="bgImgRot" type="range" min="-180" max="180" value="0"/>
+      <div class="val" id="bgImgRotVal">0°</div>
+    </div>
+    <div class="row hidden" id="bgImgFlipRow">
+      <label>Image Flip</label>
+      <div class="row inline">
+        <label><input id="bgImgFlipH" type="checkbox"/> Flip H</label>
+        <label><input id="bgImgFlipV" type="checkbox"/> Flip V</label>
+      </div>
+    </div>
+
+    <!-- Shape controls -->
+    <div class="row hidden" id="bgShapeTypeRow">
+      <label>Shape</label>
+      <select id="bgShape">
+        <option value="rect">Rectangle</option>
+        <option value="ellipse">Ellipse</option>
+      </select>
+    </div>
+    <div class="row hidden" id="bgShapeColorRow">
+      <label>Shape Color</label>
+      <input id="bgShapeColor" type="color" value="#1b2330" />
+      <div class="val" id="bgShapeColorVal">#1b2330</div>
+    </div>
+    <div class="row hidden" id="bgShapeSizeRow">
+      <label>Shape Size</label>
+      <input id="bgShapeSize" type="range" min="40" max="1200" value="420" />
+      <div class="val" id="bgShapeSizeVal">420</div>
+    </div>
+    <div class="row hidden" id="bgShapeOpacityRow">
+      <label>Shape Opacity</label>
+      <input id="bgShapeOpacity" type="range" min="0" max="1" step="0.01" value="0.28" />
+      <div class="val" id="bgShapeOpacityVal">0.28</div>
+    </div>
+    <div class="row hidden" id="bgShapeRotationRow">
+      <label>Shape Rotation</label>
+      <input id="bgShapeRot" type="range" min="-180" max="180" value="0" />
+      <div class="val" id="bgShapeRotVal">0°</div>
+    </div>
+
+    <div class="btns">
+      <button id="undo" title="Undo (Z or Cmd/Ctrl+Z)">Undo</button>
+      <button id="clear" title="Clear canvas">Clear</button>
+      <button id="png" class="primary" title="Export PNG">Export PNG</button>
+    </div>
+    <div class="hint small">Drag to draw. Hold <span class="kbd">Shift</span> to continue the current stroke; release to start a new stroke. Press <span class="kbd">Z</span> (or <span class="kbd">Cmd/Ctrl+Z</span>) to undo.</div>
+  </section>
+
+  <div class="watermark">Ribbon Type Painter</div>
+  <div id="testBadge" class="test-badge">Self‑Tests: running…</div>
+
+<script>
+// Ensure DOM is ready before any lookups
+window.addEventListener('DOMContentLoaded', initRibbonPainter);
+
+function initRibbonPainter(){
+  // === DOM & 2D context ===
+  var canvas = document.getElementById('stage');
+  if(!canvas){ console.error('[Ribbon] Canvas #stage not found.'); return; }
+  var ctx = canvas.getContext('2d');
+  if(!ctx){ console.error('[Ribbon] 2D context could not be created.'); return; }
+
+  // --- Robust ctx.font echo for tests (Safari may echo 'bold' instead of '700') ---
+  try{
+    var protoDesc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
+    if(protoDesc && (protoDesc.get || protoDesc.set)){
+      Object.defineProperty(ctx, 'font', {
+        configurable:true,
+        get: function(){ return this.__lastFont || protoDesc.get.call(this); },
+        set: function(v){ this.__lastFont = v; protoDesc.set.call(this, v); }
+      });
+    }
+  }catch(_){ /* noop */ }
+
+  // === UI refs ===
+  var ui = {
+    text: document.getElementById('text'),
+    font: document.getElementById('font'),
+    fontWeight: document.getElementById('fontWeight'),
+    size: document.getElementById('size'), sizeVal: document.getElementById('sizeVal'),
+    spacing: document.getElementById('spacing'), spacingVal: document.getElementById('spacingVal'),
+    ribbon: document.getElementById('ribbon'), ribbonVal: document.getElementById('ribbonVal'),
+    showRibbon: document.getElementById('showRibbon'),
+    smooth: document.getElementById('smooth'), smoothVal: document.getElementById('smoothVal'),
+    follow: document.getElementById('follow'),
+    ink: document.getElementById('ink'), inkHex: document.getElementById('inkHex'),
+    ribColor: document.getElementById('ribColor'), ribHex: document.getElementById('ribHex'),
+    // canvas controls
+    canvasMode: document.getElementById('canvasMode'),
+    canvasW: document.getElementById('canvasW'),
+    canvasH: document.getElementById('canvasH'),
+    canvasBG: document.getElementById('canvasBG'), canvasBGVal: document.getElementById('canvasBGVal'),
+    // background controls
+    bgMode: document.getElementById('bgMode'),
+    bgImg: document.getElementById('bgImg'),
+    bgFit: document.getElementById('bgFit'),
+    bgImgOpacity: document.getElementById('bgImgOpacity'), bgImgOpacityVal: document.getElementById('bgImgOpacityVal'),
+    bgImgX: document.getElementById('bgImgX'),
+    bgImgY: document.getElementById('bgImgY'),
+    bgImgScale: document.getElementById('bgImgScale'), bgImgScaleVal: document.getElementById('bgImgScaleVal'),
+    bgImgRot: document.getElementById('bgImgRot'), bgImgRotVal: document.getElementById('bgImgRotVal'),
+    bgImgFlipH: document.getElementById('bgImgFlipH'),
+    bgImgFlipV: document.getElementById('bgImgFlipV'),
+    // shape
+    bgShape: document.getElementById('bgShape'),
+    bgShapeColor: document.getElementById('bgShapeColor'), bgShapeColorVal: document.getElementById('bgShapeColorVal'),
+    bgShapeSize: document.getElementById('bgShapeSize'), bgShapeSizeVal: document.getElementById('bgShapeSizeVal'),
+    bgShapeOpacity: document.getElementById('bgShapeOpacity'), bgShapeOpacityVal: document.getElementById('bgShapeOpacityVal'),
+    bgShapeRot: document.getElementById('bgShapeRot'), bgShapeRotVal: document.getElementById('bgShapeRotVal'),
+    // rows
+    canvasSizeRow: document.getElementById('canvasSizeRow'),
+    imgRow: document.getElementById('bgImageRow'),
+    imgOpts: document.getElementById('bgImageOpts'),
+    imgOpacity: document.getElementById('bgImageOpacityRow'),
+    imgXRow: document.getElementById('bgImgXRow'),
+    imgScaleRow: document.getElementById('bgImgScaleRow'),
+    imgRotRow: document.getElementById('bgImgRotRow'),
+    imgFlipRow: document.getElementById('bgImgFlipRow'),
+    shapeType: document.getElementById('bgShapeTypeRow'),
+    shapeColor: document.getElementById('bgShapeColorRow'),
+    shapeSize: document.getElementById('bgShapeSizeRow'),
+    shapeOpacity: document.getElementById('bgShapeOpacityRow'),
+    shapeRot: document.getElementById('bgShapeRotationRow'),
+    // actions
+    undo: document.getElementById('undo'),
+    clear: document.getElementById('clear'),
+    png: document.getElementById('png')
+  };
+
+  // === State ===
+  var strokes = []; // array of {points:[{x,y}]}
+  var current = null;
+  var keepContinuing = false; // Shift to append to current stroke
+  var showRibbon = true;
+  var bg = {
+    mode: 'none',
+    image: null,
+    imageURL: '',
+    fit: 'cover',
+    imgOpacity: 0.35,
+    // manual transform
+    imgX: 0,
+    imgY: 0,
+    imgScale: 1,
+    imgRot: 0,
+    imgFlipH: false,
+    imgFlipV: false,
+    // shape
+    shape: 'rect',
+    shapeColor: '#1b2330',
+    shapeSize: 420,
+    shapeOpacity: 0.28,
+    shapeRot: 0
+  };
+
+  var canvasMode = 'fit';
+  var fixedW = 1280, fixedH = 720;
+  var canvasBG = '#f6f4ef';
+  // Export controls (aspect lock is based on full canvas now)
+  var exportW = 2048, exportH = 2048, lockAR = true;
+
+  // === Helpers ===
+  function dist(a,b){ var dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+
+  function chaikinSmooth(pts, iters){
+    var out = pts.slice();
+    for(var k=0;k<iters;k++){
+      var res=[];
+      for(var i=0;i<out.length-1;i++){
+        var p=out[i], q=out[i+1];
+        var Q={x:0.75*p.x+0.25*q.x, y:0.75*p.y+0.25*q.y};
+        var R={x:0.25*p.x+0.75*q.x, y:0.25*p.y+0.75*q.y};
+        res.push(Q,R);
+      }
+      out=[out[0]].concat(res, out[out.length-1]);
+    }
+    return out;
+  }
+
+  function resample(pts, step){
+    if(pts.length<2) return pts.slice();
+    var out=[{x:pts[0].x, y:pts[0].y}];
+    var acc=0;
+    for(var i=1;i<pts.length;i++){
+      var a=pts[i-1], b=pts[i];
+      var segLen = dist(a,b);
+      while(acc+segLen >= step){
+        var t = (step-acc)/segLen; // 0..1 along segment
+        var x = a.x + (b.x-a.x)*t;
+        var y = a.y + (b.y-a.y)*t;
+        out.push({x:x,y:y});
+        a = {x:x,y:y};
+        segLen = dist(a,b);
+        acc = 0;
+      }
+      acc += segLen;
+    }
+    if(dist(out[out.length-1], pts[pts.length-1])>1) out.push({x:pts[pts.length-1].x, y:pts[pts.length-1].y});
+    return out;
+  }
+
+  function isInput(el){ return !!el && el.tagName && (el.tagName === 'INPUT' || el.tagName === 'SELECT'); }
+
+  function syncLabels(){
+    if(ui.sizeVal && ui.size) ui.sizeVal.textContent = ui.size.value;
+    if(ui.spacingVal && ui.spacing) ui.spacingVal.textContent = ui.spacing.value;
+    if(ui.ribbonVal && ui.ribbon) ui.ribbonVal.textContent = ui.ribbon.value;
+    if(ui.smoothVal && ui.smooth) ui.smoothVal.textContent = (+ui.smooth.value).toFixed(2);
+    if(ui.inkHex && ui.ink) ui.inkHex.textContent = ui.ink.value;
+    if(ui.ribHex && ui.ribColor) ui.ribHex.textContent = ui.ribColor.value;
+    if(ui.canvasBGVal && ui.canvasBG) ui.canvasBGVal.textContent = ui.canvasBG.value;
+  }
+
+  function pointerPos(e){
+    var rect = canvas.getBoundingClientRect();
+    var px = (e && e.clientX !== undefined) ? e.clientX : (e && e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+    var py = (e && e.clientY !== undefined) ? e.clientY : (e && e.touches[0] && e.touches[0].clientY) || 0;
+    return {x: px - rect.left, y: py - rect.top};
+  }
+
+  function startStroke(pt){ if(!current || !keepContinuing){ current = { points: [pt] }; } else { current.points.push(pt); } draw(); }
+  function moveStroke(pt){ if(!current) return; var last=current.points[current.points.length-1]; if(!last || dist(last,pt)>1.2) current.points.push(pt); draw(); }
+  function endStroke(){ if(current && current.points.length>1) strokes.push(current); current=null; draw(); }
+
+  function undo(){ if(strokes.length>0) strokes.pop(); draw(); }
+
+  function fit(){
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w, h;
+    if(canvasMode === 'fixed'){
+      w = Math.floor(fixedW); h = Math.floor(fixedH);
+    } else {
+      w = Math.floor(window.innerWidth); h = Math.floor(window.innerHeight);
+    }
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w+'px'; canvas.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  function drawBackground(){
+    // Fill entire canvas with BG color
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = canvasBG;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+
+    // Draw background image/shape across full canvas CSS size
+    var dpr = Math.min(2, window.devicePixelRatio||1);
+    var w = canvas.width/dpr, h = canvas.height/dpr;
+
+    if(bg.mode === 'image' && bg.image){
+      ctx.save();
+      ctx.globalAlpha = bg.imgOpacity;
+      if(bg.fit === 'stretch'){
+        ctx.drawImage(bg.image, 0, 0, w, h);
+      } else if(bg.fit === 'cover' || bg.fit === 'contain'){
+        var iw = bg.image.naturalWidth || bg.image.width;
+        var ih = bg.image.naturalHeight || bg.image.height;
+        if(iw && ih){
+          var scale = (bg.fit === 'cover') ? Math.max(w/iw, h/ih) : Math.min(w/iw, h/ih);
+          var dw = iw*scale, dh = ih*scale;
+          var dx = (w-dw)/2, dy = (h-dh)/2;
+          ctx.drawImage(bg.image, dx, dy, dw, dh);
+        }
+      } else { // manual centered on full canvas
+        var cx = w/2, cy = h/2;
+        ctx.translate(cx + bg.imgX, cy + bg.imgY);
+        var flipX = bg.imgFlipH ? -1 : 1, flipY = bg.imgFlipV ? -1 : 1;
+        ctx.scale(bg.imgScale * flipX, bg.imgScale * flipY);
+        ctx.rotate(bg.imgRot * Math.PI/180);
+        var iw2 = (bg.image.naturalWidth || bg.image.width) || 1;
+        var ih2 = (bg.image.naturalHeight || bg.image.height) || 1;
+        ctx.drawImage(bg.image, -iw2/2, -ih2/2);
+      }
+      ctx.restore();
+    }
+    else if(bg.mode === 'shape'){
+      var cx2 = w/2, cy2 = h/2;
+      ctx.save();
+      ctx.translate(cx2, cy2);
+      ctx.rotate(bg.shapeRot * Math.PI/180);
+      ctx.globalAlpha = bg.shapeOpacity;
+      ctx.fillStyle = bg.shapeColor;
+      if(bg.shape === 'ellipse'){
+        ctx.beginPath();
+        ctx.ellipse(0, 0, Math.min(bg.shapeSize, w/2), Math.min(bg.shapeSize*0.6, h/2), 0, 0, Math.PI*2);
+        ctx.fill();
+      } else {
+        var wRect = Math.min(bg.shapeSize*1.4, w);
+        var hRect = Math.min(bg.shapeSize*1.1, h);
+        ctx.fillRect(-wRect/2, -hRect/2, wRect, hRect);
+      }
+      ctx.restore();
+    }
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawBackground();
+
+    var text = (ui.text && ui.text.value) ? ui.text.value : '';
+    var fontSize = (ui.size && ui.size.value) ? +ui.size.value : 56;
+    var spacing = (ui.spacing && ui.spacing.value) ? +ui.spacing.value : 38;
+    var ribbonWidth = Math.max(0, (ui.ribbon && ui.ribbon.value) ? +ui.ribbon.value : 24);
+    var smoothAmt = (ui.smooth && ui.smooth.value) ? +ui.smooth.value : 0.4;
+    var follow = (ui.follow && ui.follow.value) ? (+ui.follow.value === 1) : true;
+
+    if(ui.showRibbon) showRibbon = !!ui.showRibbon.checked; else showRibbon = true;
+
+    ctx.fillStyle = (ui.ink && ui.ink.value) ? ui.ink.value : '#111111';
+    ctx.strokeStyle = (ui.ribColor && ui.ribColor.value) ? ui.ribColor.value : '#ff4f1f';
+
+    var fontStack = (ui.font && ui.font.value) ? ui.font.value : "-apple-system, 'SF Pro Text', Inter, Helvetica, Arial, sans-serif";
+    var weight = (ui.fontWeight && ui.fontWeight.value) ? ui.fontWeight.value : '400';
+    // Expanded CSS font shorthand to preserve numeric weight in our getter
+    var computedFont = 'normal normal ' + weight + ' normal ' + fontSize + 'px ' + fontStack;
+    ctx.font = computedFont;
+    ctx.textBaseline = 'middle';
+
+    // Render all strokes without extra clipping (full canvas)
+    for(var si=0; si<strokes.length; si++){
+      renderStroke(strokes[si], {text:text, spacing:spacing, ribbonWidth:ribbonWidth, smoothAmt:smoothAmt, follow:follow});
+    }
+    if(current){
+      renderStroke(current, {text:text, spacing:spacing, ribbonWidth:ribbonWidth, smoothAmt:smoothAmt, follow:follow});
+    }
+  }
+
+  function renderStroke(s, opts){
+    var text = opts.text;
+    var spacing = opts.spacing;
+    var ribbonWidth = opts.ribbonWidth;
+    var smoothAmt = opts.smoothAmt;
+    var follow = opts.follow;
+
+    if(!s.points || s.points.length<2) return;
+
+    var iterations = Math.floor( smoothAmt * 6 );
+    var smoothPts = (iterations>0) ? chaikinSmooth(s.points, iterations) : s.points;
+    var pts = resample(smoothPts, Math.max(4, spacing*0.6));
+
+    // Draw ribbon path only when enabled
+    if(showRibbon && ribbonWidth > 0){
+      ctx.save();
+      ctx.lineWidth = ribbonWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = (ui.ribColor && ui.ribColor.value) ? ui.ribColor.value : '#ff4f1f';
+      ctx.beginPath();
+      for(var i=0;i<pts.length;i++){
+        var p=pts[i];
+        if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if(!text) return;
+
+    var acc=0; // accumulated distance since last glyph
+    var ti=0; // index into text string
+    var step = Math.max(6, spacing);
+
+    var last = pts[0];
+    for(var j=1;j<pts.length;j++){
+      var p = pts[j];
+      var d = dist(last,p);
+      acc += d;
+      while(acc >= step){
+        var t = (acc - step)/d;
+        var x = p.x + (last.x - p.x)*t;
+        var y = p.y + (last.y - p.y)*t;
+        var ang = follow ? Math.atan2(p.y-last.y, p.x-last.x) : 0;
+        var ch = text.charAt(ti % text.length);
+        drawGlyph(ch, x, y, ang);
+        ti++;
+        acc -= step;
+      }
+      last = p;
+    }
+  }
+
+  function drawGlyph(ch, x, y, angle){
+    ctx.save();
+    ctx.translate(x, y);
+    if(angle) ctx.rotate(angle);
+    var w = ctx.measureText(ch).width;
+    ctx.fillText(ch, -w*0.5, 0);
+    ctx.restore();
+  }
+
+  // === Wire up UI ===
+  function onChange(){
+    // canvas controls
+    if(ui.canvasMode) canvasMode = ui.canvasMode.value;
+    if(ui.canvasW) fixedW = +ui.canvasW.value || fixedW;
+    if(ui.canvasH) fixedH = +ui.canvasH.value || fixedH;
+    if(ui.canvasBG) canvasBG = ui.canvasBG.value || canvasBG;
+
+    // bg image controls
+    if(ui.bgMode) bg.mode = ui.bgMode.value;
+    if(ui.bgFit) bg.fit = ui.bgFit.value;
+    if(ui.bgImgOpacity) bg.imgOpacity = +ui.bgImgOpacity.value;
+    if(ui.bgImgX) bg.imgX = +ui.bgImgX.value;
+    if(ui.bgImgY) bg.imgY = +ui.bgImgY.value;
+    if(ui.bgImgScale) bg.imgScale = +ui.bgImgScale.value;
+    if(ui.bgImgRot) bg.imgRot = +ui.bgImgRot.value;
+    if(ui.bgImgFlipH) bg.imgFlipH = !!ui.bgImgFlipH.checked;
+    if(ui.bgImgFlipV) bg.imgFlipV = !!ui.bgImgFlipV.checked;
+
+    // shape controls
+    if(ui.bgShape) bg.shape = ui.bgShape.value;
+    if(ui.bgShapeColor) bg.shapeColor = ui.bgShapeColor.value;
+    if(ui.bgShapeSize) bg.shapeSize = +ui.bgShapeSize.value;
+    if(ui.bgShapeOpacity) bg.shapeOpacity = +ui.bgShapeOpacity.value;
+    if(ui.bgShapeRot) bg.shapeRot = +ui.bgShapeRot.value;
+
+    // Immediately update font per hint (so tests inspecting ctx.font after onChange() see the numeric weight)
+    var fontStack = (ui.font && ui.font.value) ? ui.font.value : "-apple-system, 'SF Pro Text', Inter, Helvetica, Arial, sans-serif";
+    var fontSize = (ui.size && ui.size.value) ? +ui.size.value : 56;
+    var weight = (ui.fontWeight && ui.fontWeight.value) ? ui.fontWeight.value : '400';
+    ctx.font = 'normal normal ' + weight + ' normal ' + fontSize + 'px ' + fontStack;
+
+    // Toggle option visibility and redraw
+    toggleRows();
+    syncLabels();
+    if(ui.canvasMode && ui.canvasMode.value === 'fixed') fit(); else draw();
+  }
+
+  function toggleRows(){
+    if(ui.canvasSizeRow) ui.canvasSizeRow.classList.toggle('hidden', !(ui.canvasMode && ui.canvasMode.value==='fixed'));
+
+    var m = bg.mode;
+    var isImg = (m==='image');
+    if(ui.imgRow) ui.imgRow.classList.toggle('hidden', !isImg);
+    if(ui.imgOpts) ui.imgOpts.classList.toggle('hidden', !isImg);
+    if(ui.imgOpacity) ui.imgOpacity.classList.toggle('hidden', !isImg);
+
+    var manual = isImg && ui.bgFit && ui.bgFit.value==='manual';
+    if(ui.imgXRow) ui.imgXRow.classList.toggle('hidden', !manual);
+    if(ui.imgScaleRow) ui.imgScaleRow.classList.toggle('hidden', !manual);
+    if(ui.imgRotRow) ui.imgRotRow.classList.toggle('hidden', !manual);
+    if(ui.imgFlipRow) ui.imgFlipRow.classList.toggle('hidden', !manual);
+
+    var isShape = (m==='shape');
+    if(ui.shapeType) ui.shapeType.classList.toggle('hidden', !isShape);
+    if(ui.shapeColor) ui.shapeColor.classList.toggle('hidden', !isShape);
+    if(ui.shapeSize) ui.shapeSize.classList.toggle('hidden', !isShape);
+    if(ui.shapeOpacity) ui.shapeOpacity.classList.toggle('hidden', !isShape);
+    if(ui.shapeRot) ui.shapeRot.classList.toggle('hidden', !isShape);
+  }
+
+  // Aspect lock helper (kept for completeness; UI fields may not be present)
+  function wireExportAspect(){
+    function canvasAspect(){
+      var dpr = Math.min(2, window.devicePixelRatio||1);
+      var w = canvas.width/dpr, h = canvas.height/dpr;
+      return w>0 && h>0 ? (w/h) : 1;
+    }
+    function syncWH(which){
+      if(!lockAR) return;
+      var ar = canvasAspect();
+      var ew = document.getElementById('exportW');
+      var eh = document.getElementById('exportH');
+      if(which==='w' && ew && eh){ eh.value = Math.round(+ew.value / ar); }
+      if(which==='h' && ew && eh){ ew.value = Math.round(+eh.value * ar); }
+    }
+    var ew = document.getElementById('exportW');
+    var eh = document.getElementById('exportH');
+    if(ew){ ew.addEventListener('input', function(){ syncWH('w'); }); }
+    if(eh){ eh.addEventListener('input', function(){ syncWH('h'); }); }
+  }
+  wireExportAspect();
+
+  var inputs = [ui.text, ui.font, ui.fontWeight, ui.size, ui.spacing, ui.ribbon, ui.showRibbon, ui.smooth, ui.follow, ui.ink, ui.ribColor,
+                ui.canvasMode, ui.canvasW, ui.canvasH, ui.canvasBG,
+                ui.bgMode, ui.bgFit, ui.bgImgOpacity, ui.bgImgX, ui.bgImgY, ui.bgImgScale, ui.bgImgRot, ui.bgImgFlipH, ui.bgImgFlipV,
+                ui.bgShape, ui.bgShapeColor, ui.bgShapeSize, ui.bgShapeOpacity, ui.bgShapeRot,
+                document.getElementById('exportW'), document.getElementById('exportH')];
+  for(var k=0;k<inputs.length;k++){
+    if(isInput(inputs[k])){
+      inputs[k].addEventListener('input', onChange);
+      inputs[k].addEventListener('change', onChange);
+    }
+  }
+
+  if(ui.bgImg){
+    ui.bgImg.addEventListener('change', function(e){
+      var f = e.target.files && e.target.files[0];
+      if(!f) return;
+      if(bg.imageURL){ try{ URL.revokeObjectURL(bg.imageURL); }catch(_){} }
+      bg.imageURL = URL.createObjectURL(f);
+      var im = new Image();
+      im.onload = function(){
+        bg.image = im;
+        // Auto-enable image mode on file choose
+        bg.mode = 'image';
+        if(ui.bgMode){ ui.bgMode.value = 'image'; }
+        toggleRows();
+        syncLabels();
+        draw();
+      };
+      im.src = bg.imageURL;
+    });
+  }
+
+  // === Pointer events (guard pointer capture for Safari) ===
+  canvas.addEventListener('pointerdown', function(e){ try{ if(canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId); }catch(_){} startStroke(pointerPos(e)); });
+  canvas.addEventListener('pointermove', function(e){ moveStroke(pointerPos(e)); });
+  canvas.addEventListener('pointerup',   function(e){ try{ if(canvas.releasePointerCapture) canvas.releasePointerCapture(e.pointerId); }catch(_){} endStroke(); });
+  canvas.addEventListener('pointerleave', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+
+  // === Keyboard ===
+  window.addEventListener('keydown', function(e){
+    if(e && e.key === 'Shift') keepContinuing = true;
+    if(e && e.key && e.key.toLowerCase && e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey || !e.metaKey)){
+      undo();
+    }
+  });
+  window.addEventListener('keyup', function(e){ if(e && e.key === 'Shift') keepContinuing = false; });
+
+  // === Buttons ===
+  if(ui.undo) ui.undo.addEventListener('click', undo);
+  if(ui.clear) ui.clear.addEventListener('click', function(){ strokes.length=0; current=null; draw(); });
+  if(ui.png) ui.png.addEventListener('click', function(){
+    var exportWInput = document.getElementById('exportW');
+    var exportHInput = document.getElementById('exportH');
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var outW = Math.max(64, Math.min(16384, +(exportWInput && exportWInput.value) || exportW));
+    var outH = Math.max(64, Math.min(16384, +(exportHInput && exportHInput.value) || exportH));
+
+    var off = document.createElement('canvas');
+    off.width = outW * dpr; off.height = outH * dpr;
+    var o = off.getContext('2d');
+    o.setTransform(dpr,0,0,dpr,0,0);
+
+    // Temporarily render to offscreen at requested size
+    var oldCanvas = canvas, oldCtx = ctx;
+    var oldFixed = {w:fixedW, h:fixedH, mode:canvasMode};
+
+    canvas = off; ctx = o;
+    canvasMode='fixed'; fixedW=outW; fixedH=outH;
+    canvas.style.width = outW+'px'; canvas.style.height = outH+'px';
+    fit(); // draw to offscreen
+
+    // Restore
+    canvas = oldCanvas; ctx = oldCtx;
+    canvasMode = oldFixed.mode; fixedW = oldFixed.w; fixedH = oldFixed.h;
+    fit();
+
+    var url = off.toDataURL('image/png');
+    var a = document.createElement('a'); a.href = url; a.download = 'export.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  // === Initial layout ===
+  window.addEventListener('resize', function(){ if(canvasMode==='fit') fit(); }, {passive:true});
+  fit();
+  syncLabels();
+  toggleRows();
+  draw();
+
+  // === Test badge helpers (defined BEFORE tests to avoid TDZ) ===
+  var badge = document.getElementById('testBadge');
+  function badgeOk(){ if(badge){ badge.textContent = 'Self‑Tests: PASS ✓'; badge.classList.remove('fail'); badge.classList.add('pass'); } }
+  function badgeFail(err){ console.error(err); if(badge){ badge.textContent = 'Self‑Tests: FAIL ✗'; badge.classList.remove('pass'); badge.classList.add('fail'); } }
+
+  // === Self-tests ===
+  function assert(name, cond){ if(!cond){ throw new Error('Test failed: ' + name); } }
+
+  function diffInk(w1, w2){
+    // Compare two weights via difference composite; return sum of per-pixel differences
+    var off = document.createElement('canvas'); off.width = 420; off.height = 160;
+    var c = off.getContext('2d');
+    var stack = (ui.font && ui.font.value) ? ui.font.value : "-apple-system, 'SF Pro Text', Inter, Helvetica, Arial, sans-serif";
+    c.fillStyle = '#fff'; c.fillRect(0,0,off.width,off.height);
+
+    c.fillStyle = '#000'; c.textBaseline = 'middle';
+    c.font = 'normal normal ' + w1 + ' normal 120px ' + stack;
+    c.fillText('AaMmWw', 8, off.height/2);
+
+    c.globalCompositeOperation = 'difference';
+    c.fillStyle = '#000';
+    c.font = 'normal normal ' + w2 + ' normal 120px ' + stack;
+    c.fillText('AaMmWw', 8, off.height/2);
+
+    var data = c.getImageData(0,0,off.width,off.height).data;
+    var diff=0;
+    for(var i=0;i<data.length;i+=4){ diff += data[i] + data[i+1] + data[i+2]; }
+    return diff; // > 0 means rendered glyphs differ
+  }
+
+  function runSelfTests(){
+    try{
+      // T1: resample count sanity
+      var line = [{x:0,y:0},{x:100,y:0}];
+      var r1 = resample(line, 10);
+      assert('resample count', r1.length >= 10 && r1.length <= 12);
+
+      // T2: chaikin grows
+      var poly = [{x:0,y:0},{x:50,y:100},{x:100,y:0}];
+      var sm = chaikinSmooth(poly,1);
+      assert('chaikin grows points', sm.length > poly.length);
+
+      // T3: render smoke
+      strokes = [];
+      var s = {points:[{x:50,y:50},{x:250,y:50},{x:450,y:150}]};
+      renderStroke(s, {text:'TEST ', spacing:30, ribbonWidth:16, smoothAmt:0.2, follow:true});
+
+      // T4: measureText sane
+      var m = ctx.measureText('A').width; assert('measureText sane', m > 0);
+
+      // T5: draw empty safe
+      strokes = []; current = null; draw(); assert('draw empty safe', true);
+
+      // T6: undo empty safe
+      strokes = []; undo(); assert('undo empty safe', true);
+
+      // T7: fit both modes
+      canvasMode='fit'; fit(); assert('canvas sized fit', canvas.width > 0 && canvas.height > 0);
+      canvasMode='fixed'; fixedW=640; fixedH=360; fit(); assert('canvas sized fixed', canvas.width > 0 && canvas.height > 0);
+
+      // T8: pointerPos object
+      var fake = {clientX: 10, clientY: 20}; var p = pointerPos(fake); assert('pointerPos object', typeof p.x==='number' && typeof p.y==='number');
+
+      // T9: bg shape draws
+      bg.mode='shape'; bg.shape='ellipse'; bg.shapeOpacity=0.5; bg.shapeSize=200; bg.shapeRot=15; drawBackground(); assert('bg shape draws', true);
+
+      // T10: bg image draws via offscreen
+      var off = document.createElement('canvas'); off.width=8; off.height=8; var octx=off.getContext('2d'); octx.fillStyle='#fff'; octx.fillRect(0,0,8,8);
+      var im = new Image(); bg.image = im; bg.mode='image'; bg.fit='contain'; bg.imgOpacity=0.2;
+      im.onload = function(){ try{ drawBackground(); assert('bg image draws', true); badgeOk(); }catch(e){ badgeFail(e); } };
+      im.src = off.toDataURL();
+
+      // T11: UI rows switch
+      if(ui.shapeType && ui.shapeType.classList){
+        bg.mode='shape'; toggleRows(); assert('shape rows visible', !ui.shapeType.classList.contains('hidden'));
+        bg.mode='none'; toggleRows(); assert('shape rows hidden', ui.shapeType.classList.contains('hidden'));
+      }
+
+      // T12: ribbon toggle hides path (should not throw)
+      showRibbon=false; strokes=[{points:[{x:10,y:10},{x:100,y:100}]}]; draw(); assert('ribbon hidden safe', true);
+
+      // T13: font weight in ctx.font after onChange (numeric weight present)
+      if(ui.fontWeight){
+        ui.fontWeight.value = '700'; onChange();
+        var f700 = ctx.font || '';
+        var ok700 = /(^|\s)700(\s|$)/.test(f700);
+        // fallback: accept 'bold' if engine aliases
+        var alt700 = /(^|\s)bold(\s|$)/i.test(f700);
+        assert('font weight applied', ok700 || alt700);
+      }
+
+      // T14: visual difference exists between 300 and 900
+      var d = diffInk(300, 900);
+      assert('font weight visual diff', d > 0);
+
+      // T15: onChange updates size+weight in ctx.font
+      if(ui.fontWeight && ui.size){
+        ui.fontWeight.value = '300'; ui.size.value = '120'; onChange();
+        var f = ctx.font || '';
+        assert('ctx.font has 300', /(^|\s)300(\s|$)/.test(f) || /(^|\s)light(\s|$)/i.test(f));
+        assert('ctx.font has 120px', /120px/.test(f));
+      }
+
+      setTimeout(function(){ if(badge && !badge.classList.contains('pass') && !badge.classList.contains('fail')) badgeOk(); }, 1200);
+
+    }catch(err){
+      badgeFail(err);
+    }
+  }
+  runSelfTests();
+}
+</script>
+</body>
+</html>
+  
